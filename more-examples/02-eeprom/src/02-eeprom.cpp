@@ -2,6 +2,7 @@
 #include "CloudConfigRK.h"
 
 SerialLogHandler logHandler;
+SYSTEM_THREAD(ENABLED);
 SYSTEM_MODE(SEMI_AUTOMATIC);
 
 void buttonHandler(system_event_t event, int data);

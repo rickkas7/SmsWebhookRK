@@ -95,7 +95,6 @@ $(function() {
 </div><!-- fragment --><p>This queues the SMS message to send. If the device is online and connected to the Particle cloud, it will be sent immediately. Otherwise, it will be queued to send later.</p>
 <p>If an error occurs and the publish fails, the message will be retried later.</p>
 <p>If you are only sending SMS to yourself from your own devices, you can leave the recipient phone number out and instead encode it in the webhook, that way you don't need to code your phone number in your application code.</p>
-<p>The more-examples/02-eeprom example</p>
 <p>There are more options available as described in the Examples section, below.</p>
 <h1>Setup</h1>
 <h2>Twilio Setup</h2>
@@ -161,6 +160,8 @@ Advanced Settings</div></div>
 <div class="fragment"><div class="line"><span class="preprocessor">#include &quot;SmsWebhookRK.h&quot;</span></div>
 <div class="line"> </div>
 <div class="line">SerialLogHandler logHandler;</div>
+<div class="line"> </div>
+<div class="line">SYSTEM_THREAD(ENABLED);</div>
 <div class="line">SYSTEM_MODE(SEMI_AUTOMATIC);</div>
 <div class="line"> </div>
 <div class="line"><span class="keywordtype">void</span> buttonHandler(system_event_t event, <span class="keywordtype">int</span> data);</div>
@@ -204,8 +205,9 @@ Advanced Settings</div></div>
 <div class="fragment"><div class="line">#include &quot;SmsWebhookRK.h&quot;</div>
 </div><!-- fragment --><p>This is so log message can be seen by the USB serial debugging output. The library uses "sms" as the logging category so you can turn off the messages if desired.</p>
 <div class="fragment"><div class="line">SerialLogHandler logHandler;</div>
-</div><!-- fragment --><p>The code can be used in both <code>AUTOMATIC</code> and <code>SEMI_AUTOMATIC</code> mode.</p>
-<div class="fragment"><div class="line">SYSTEM_MODE(SEMI_AUTOMATIC);</div>
+</div><!-- fragment --><p>System threading enabled is recommended for this library. The code can be used in both <code>AUTOMATIC</code> and <code>SEMI_AUTOMATIC</code> mode.</p>
+<div class="fragment"><div class="line">SYSTEM_THREAD(ENABLED);</div>
+<div class="line">SYSTEM_MODE(SEMI_AUTOMATIC);</div>
 </div><!-- fragment --><p>This is a forward declaration, because we use the function in a call to <code>System.on()</code> before it's implemented in the .cpp file.</p>
 <div class="fragment"><div class="line">void buttonHandler(system_event_t event, int data);</div>
 </div><!-- fragment --><p>The button handler can be called at interrupt time, so it's best to just set a flag and handle it from loop.</p>
@@ -215,59 +217,64 @@ Advanced Settings</div></div>
 <div class="line">    SmsWebhook::instance().setup();</div>
 </div><!-- fragment --><p>Add the button handler:</p>
 <div class="fragment"><div class="line">System.on(button_final_click, buttonHandler);</div>
-</div><!-- fragment --><p>Since we used <code>SYSTEM_MODE(SEMI_AUTOMATIC)</code> connect to the cloud. If you use <code>AUTOMATIC</code> you don't need the call to <code>Particle.connect()</code>.</p>
+</div><!-- fragment --><p>Since we used <code>SYSTEM_MODE(SEMI_AUTOMATIC)</code> it's necessary to call <code>Particle.connect()</code> to connect to the cloud. If you use <code>AUTOMATIC</code> you don't need this.</p>
 <div class="fragment"><div class="line">    Particle.connect();</div>
 <div class="line">}</div>
+</div><!-- fragment --><p>You must call <code><a class="el" href="class_sms_webhook.html#a749eb4c9932d233524aebe1054960e65" title="Get the singleton instance of this class.">SmsWebhook::instance()</a>.loop()</code> from global application <code>loop()</code>!</p>
+<div class="fragment"><div class="line">void loop() {</div>
+<div class="line">    SmsWebhook::instance().loop();</div>
+</div><!-- fragment --><p>This checks the flag set by the button handler.</p>
+<div class="fragment"><div class="line">if (buttonPressed) {</div>
+<div class="line">    static unsigned int counter = 0;</div>
 <div class="line"> </div>
-<div class="line">You must call `SmsWebhook::instance().loop()` from global application `loop()`!</div>
-</div><!-- fragment --><p>void loop() { <a class="el" href="class_sms_webhook.html#a749eb4c9932d233524aebe1054960e65" title="Get the singleton instance of this class.">SmsWebhook::instance()</a>.loop(); </p><div class="fragment"><div class="line">This checks the flag set by the button handler.</div>
-</div><!-- fragment --> <pre class="fragment">if (buttonPressed) {
-    static unsigned int counter = 0;
-
-    buttonPressed = false;
-</pre> <div class="fragment"><div class="line">And this is the part that sends the SMS. </div>
+<div class="line">    buttonPressed = false;</div>
+</div><!-- fragment --><p>And this is the part that sends the SMS.</p>
+<ul>
+<li>Create a <code><a class="el" href="class_sms_message.html" title="Class for setting parameters for a SMS message.">SmsMessage</a></code> object on the stack (it's small)</li>
+<li>Set the recipient phone number using <code>withRecipient()</code>. Note that the phone number must be in + country code format, so in the United States it will begin with <code>+1</code>.</li>
+<li>Set the text of the message using <code>withMessage()</code>. In this case, we format a message with a counter that increases each time a message is sent.</li>
+<li>Logs the message to the USB serial debug</li>
+<li>Queues the message to send using <code><a class="el" href="class_sms_webhook.html#a749eb4c9932d233524aebe1054960e65" title="Get the singleton instance of this class.">SmsWebhook::instance()</a>.queueSms(mesg)</code>.</li>
+</ul>
+<div class="fragment"><div class="line">        SmsMessage mesg;</div>
+<div class="line">        mesg.withRecipient(&quot;+12125551212&quot;)</div>
+<div class="line">            .withMessage(String::format(&quot;Message %d!&quot;, ++counter));</div>
 <div class="line"> </div>
-<div class="line">- Create a `SmsMessage` object on the stack (it&#39;s small)</div>
-<div class="line">- Set the recipient phone number using `withRecipient()`. Note that the phone number must be in + country code format, so in the United States it will begin with `+1`.</div>
-<div class="line">- Set the text of the message using `withMessage()`. In this case, we format a message with a counter that increases each time a message is sent.</div>
-<div class="line">- Logs the message to the USB serial debug</div>
-<div class="line">- Queues the message to send using `SmsWebhook::instance().queueSms(mesg)`.</div>
-</div><!-- fragment --> <pre class="fragment">    SmsMessage mesg;
-    mesg.withRecipient("+12125551212")
-        .withMessage(String::format("Message %d!", ++counter));
-
-    Log.info("queued %s", mesg.getMessage());
-
-    SmsWebhook::instance().queueSms(mesg);
-}
-</pre><p> } </p><div class="fragment"><div class="line">When the MODE/SETUP button is tapped once, this handles it and sets a flag to be handled from loop().</div>
-</div><!-- fragment --><p>void buttonHandler(system_event_t event, int data) { int clicks = system_button_clicks(data); if (clicks == 1) { buttonPressed = true; } } </p><div class="fragment"><div class="line">### more-examples/02-eeprom</div>
+<div class="line">        Log.info(&quot;queued %s&quot;, mesg.getMessage());</div>
 <div class="line"> </div>
-<div class="line">This example uses the [CloudConfigRK](https://github.com/rickkas7/CloudConfigRK/) library to store the recipient phone number in the emulated EEPROM on the device. This allows a per-device phone number, without requiring the phone number be hardcoded in the user firmware. This is also helpful if you are creating a product, so you can have individual customer phone numbers and have one firmware binary and one webhook.</div>
-<div class="line"> </div>
-<div class="line">The library has many options, including:</div>
-<div class="line"> </div>
-<div class="line">- Storing the data in retained memory, EEPROM, or a file on the Gen 3 flash file system.</div>
-<div class="line">- Setting the data using a Particle function (demonstrated here), as well as published message, device notes, or a Google spreadsheet.</div>
-<div class="line"> </div>
-<div class="line">The code to hook the two libraries together and set the phone number with a function call (once), store it in EEPROM, then use it for any SMS notification is mostly just this:</div>
-<div class="line"> </div>
-<div class="line">```cpp</div>
-<div class="line">CloudConfig::instance()</div>
-<div class="line">    .withUpdateMethod(new CloudConfigUpdateFunction(&quot;setConfig&quot;))</div>
-<div class="line">    .withStorageMethod(new CloudConfigStorageEEPROM&lt;128&gt;(EEPROM_OFFSET))</div>
+<div class="line">        SmsWebhook::instance().queueSms(mesg);</div>
+<div class="line">    }</div>
+<div class="line">}</div>
+</div><!-- fragment --><p>When the MODE/SETUP button is tapped once, this handles it and sets a flag to be handled from loop().</p>
+<div class="fragment"><div class="line">void buttonHandler(system_event_t event, int data) {</div>
+<div class="line">    int clicks = system_button_clicks(data);</div>
+<div class="line">    if (clicks == 1) {</div>
+<div class="line">        buttonPressed = true;</div>
+<div class="line">    }</div>
+<div class="line">}</div>
+</div><!-- fragment --><h2>more-examples/02-eeprom</h2>
+<p>This example uses the <a href="https://github.com/rickkas7/CloudConfigRK/">CloudConfigRK</a> library to store the recipient phone number in the emulated EEPROM on the device. This allows a per-device phone number, without requiring the phone number be hardcoded in the user firmware. This is also helpful if you are creating a product, so you can have individual customer phone numbers and have one firmware binary and one webhook.</p>
+<p>The library has many options, including:</p>
+<ul>
+<li>Storing the data in retained memory, EEPROM, or a file on the Gen 3 flash file system.</li>
+<li>Setting the data using a Particle function (demonstrated here), as well as published message, device notes, or a Google spreadsheet.</li>
+</ul>
+<p>The code to hook the two libraries together and set the phone number with a function call (once), store it in EEPROM, then use it for any SMS notification is mostly just this:</p>
+<div class="fragment"><div class="line">CloudConfig::instance()</div>
+<div class="line">    .withUpdateMethod(<span class="keyword">new</span> CloudConfigUpdateFunction(<span class="stringliteral">&quot;setConfig&quot;</span>))</div>
+<div class="line">    .withStorageMethod(<span class="keyword">new</span> CloudConfigStorageEEPROM&lt;128&gt;(EEPROM_OFFSET))</div>
 <div class="line">    .setup();</div>
 <div class="line"> </div>
-<div class="line">SmsWebhook::instance().setup();</div>
+<div class="line"><a class="code" href="class_sms_webhook.html#a749eb4c9932d233524aebe1054960e65">SmsWebhook::instance</a>().<a class="code" href="class_sms_webhook.html#a76bddfbdcd5aedd029e7c64115eb948e">setup</a>();</div>
 <div class="line"> </div>
-<div class="line">SmsWebhook::instance()</div>
-<div class="line">    .withEventName(&quot;SendSmsEvent&quot;)</div>
-<div class="line">    .withRecipientCallback([](String &amp;recipient) {</div>
-<div class="line">        // This function is called to find out the recipient&#39;s SMS phone number</div>
-<div class="line">        // If this has not been set yet, the string will be empty and we will</div>
-<div class="line">        // try again later.</div>
-<div class="line">        recipient = CloudConfig::instance().getString(&quot;t&quot;);</div>
-<div class="line">        return (recipient.length() &gt; 0);</div>
+<div class="line"><a class="code" href="class_sms_webhook.html#a749eb4c9932d233524aebe1054960e65">SmsWebhook::instance</a>()</div>
+<div class="line">    .<a class="code" href="class_sms_webhook.html#ab295bf21bc864856088e4e6de1ef82d3">withEventName</a>(<span class="stringliteral">&quot;SendSmsEvent&quot;</span>)</div>
+<div class="line">    .<a class="code" href="class_sms_webhook.html#a303ef010481ef81c4e52b0770ebc57c3">withRecipientCallback</a>([](String &amp;recipient) {</div>
+<div class="line">        <span class="comment">// This function is called to find out the recipient&#39;s SMS phone number</span></div>
+<div class="line">        <span class="comment">// If this has not been set yet, the string will be empty and we will</span></div>
+<div class="line">        <span class="comment">// try again later.</span></div>
+<div class="line">        recipient = CloudConfig::instance().getString(<span class="stringliteral">&quot;t&quot;</span>);</div>
+<div class="line">        <span class="keywordflow">return</span> (recipient.length() &gt; 0);</div>
 <div class="line">    });</div>
 </div><!-- fragment --><p>To set the phone number make a function call <code>setConfig</code> with the data</p>
 <div class="fragment"><div class="line">{&quot;t&quot;:&quot;+12125551212&quot;}</div>
@@ -283,7 +290,9 @@ Advanced Settings</div></div>
 </div></div><!-- PageDoc -->
 </div><!-- contents -->
 <div class="ttc" id="aclass_sms_message_html_a78f70d993eebcedb703eddbec463af35"><div class="ttname"><a href="class_sms_message.html#a78f70d993eebcedb703eddbec463af35">SmsMessage::getMessage</a></div><div class="ttdeci">const char * getMessage() const</div><div class="ttdoc">Gets the previously set message text.</div><div class="ttdef"><b>Definition:</b> SmsWebhookRK.h:76</div></div>
+<div class="ttc" id="aclass_sms_webhook_html_ab295bf21bc864856088e4e6de1ef82d3"><div class="ttname"><a href="class_sms_webhook.html#ab295bf21bc864856088e4e6de1ef82d3">SmsWebhook::withEventName</a></div><div class="ttdeci">SmsWebhook &amp; withEventName(const char *eventName)</div><div class="ttdoc">Sets the event name to use. This must match the webhook. Default is &quot;SendSmsEvent&quot;.</div><div class="ttdef"><b>Definition:</b> SmsWebhookRK.h:157</div></div>
 <div class="ttc" id="aclass_sms_message_html_ae368ada7e2238f17669da2ba833e40cc"><div class="ttname"><a href="class_sms_message.html#ae368ada7e2238f17669da2ba833e40cc">SmsMessage::withRecipient</a></div><div class="ttdeci">SmsMessage &amp; withRecipient(const char *phoneNum)</div><div class="ttdoc">Sets the recipient phone number.</div><div class="ttdef"><b>Definition:</b> SmsWebhookRK.h:49</div></div>
+<div class="ttc" id="aclass_sms_webhook_html_a303ef010481ef81c4e52b0770ebc57c3"><div class="ttname"><a href="class_sms_webhook.html#a303ef010481ef81c4e52b0770ebc57c3">SmsWebhook::withRecipientCallback</a></div><div class="ttdeci">SmsWebhook &amp; withRecipientCallback(std::function&lt; bool(String &amp;phone)&gt; recipientCallback)</div><div class="ttdoc">Sets a function to call to get the recipient if the SmsMessage recipient field is black.</div><div class="ttdef"><b>Definition:</b> SmsWebhookRK.h:182</div></div>
 <div class="ttc" id="aclass_sms_message_html"><div class="ttname"><a href="class_sms_message.html">SmsMessage</a></div><div class="ttdoc">Class for setting parameters for a SMS message.</div><div class="ttdef"><b>Definition:</b> SmsWebhookRK.h:23</div></div>
 <div class="ttc" id="aclass_sms_webhook_html_ae81962c1b0ff55cb5336ad58298620d1"><div class="ttname"><a href="class_sms_webhook.html#ae81962c1b0ff55cb5336ad58298620d1">SmsWebhook::loop</a></div><div class="ttdeci">void loop()</div><div class="ttdoc">You must call loop() from global application loop()!</div><div class="ttdef"><b>Definition:</b> SmsWebhookRK.cpp:21</div></div>
 <div class="ttc" id="aclass_sms_webhook_html_a4694830021baf25d707cb6ff344763d9"><div class="ttname"><a href="class_sms_webhook.html#a4694830021baf25d707cb6ff344763d9">SmsWebhook::queueSms</a></div><div class="ttdeci">void queueSms(SmsMessage smsMessage)</div><div class="ttdoc">Queue a SmsMessage to send.</div><div class="ttdef"><b>Definition:</b> SmsWebhookRK.cpp:28</div></div>

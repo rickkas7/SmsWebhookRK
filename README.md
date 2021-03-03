@@ -2,6 +2,11 @@
 
 *Library for Particle devices to easily send SMS via a webhook to Twilio*
 
+- [Github repository](https://github.com/rickkas7/SmsWebhookRK)
+- [Full browsable API](https://rickkas7.github.io/SmsWebhookRK/index.html)
+- License: MIT (can be used in open or closed-source projects, including commercial projects, with no attribution required)
+- Library: SmsWebhookRK
+
 ## Using the library
 
 - Add the library to your project. Using Particle Workbench, from the Command Palette **Particle: Install Library** and add **SmsWebhookRK**. It's also avaiable in the community libraries in the Web IDE.
@@ -43,8 +48,6 @@ This queues the SMS message to send. If the device is online and connected to th
 If an error occurs and the publish fails, the message will be retried later.
 
 If you are only sending SMS to yourself from your own devices, you can leave the recipient phone number out and instead encode it in the webhook, that way you don't need to code your phone number in your application code. 
-
-The more-examples/02-eeprom example 
 
 There are more options available as described in the Examples section, below.
 
@@ -121,6 +124,8 @@ Here's the full code for the simple example. Tapping the MODE (or SETUP) button 
 #include "SmsWebhookRK.h"
 
 SerialLogHandler logHandler;
+
+SYSTEM_THREAD(ENABLED);
 SYSTEM_MODE(SEMI_AUTOMATIC);
 
 void buttonHandler(system_event_t event, int data);
@@ -176,9 +181,10 @@ This is so log message can be seen by the USB serial debugging output. The libra
 SerialLogHandler logHandler;
 ```
 
-The code can be used in both `AUTOMATIC` and `SEMI_AUTOMATIC` mode.
+System threading enabled is recommended for this library. The code can be used in both `AUTOMATIC` and `SEMI_AUTOMATIC` mode.
 
 ```
+SYSTEM_THREAD(ENABLED);
 SYSTEM_MODE(SEMI_AUTOMATIC);
 ```
 
@@ -207,11 +213,12 @@ Add the button handler:
     System.on(button_final_click, buttonHandler);
 ```
 
-Since we used `SYSTEM_MODE(SEMI_AUTOMATIC)` connect to the cloud. If you use `AUTOMATIC` you don't need the call to `Particle.connect()`.
+Since we used `SYSTEM_MODE(SEMI_AUTOMATIC)` it's necessary to call `Particle.connect()` to connect to the cloud. If you use `AUTOMATIC` you don't need this.
 
 ```
     Particle.connect();
 }
+```
 
 You must call `SmsWebhook::instance().loop()` from global application `loop()`!
 
