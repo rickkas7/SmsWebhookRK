@@ -23,11 +23,13 @@ void loop() {
 
         buttonPressed = false;
 
-        SmsMessage msg;
-        msg.withMessage(String::format("Message %d!", ++counter));
-        Log.info("queued %s", msg.getMessage());
+        SmsMessage mesg;
+        mesg.withRecipient("+12125551212")
+            .withMessage(String::format("Message %d!", ++counter));
 
-        SmsWebhook::instance().queueSms(msg);
+        Log.info("queued %s", mesg.getMessage());
+
+        SmsWebhook::instance().queueSms(mesg);
     }
 }
 

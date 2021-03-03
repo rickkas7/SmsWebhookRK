@@ -5,16 +5,6 @@ static Logger _log("sms");
 
 SmsWebhook *SmsWebhook::_instance;
 
-bool SmsMessage::isExpired() const {
-    if (expirationMs) {
-        return (millis() - queueMs) < expirationMs;
-    }
-    else {
-        // Never expires
-        return false;
-    }
-}
-
 
 SmsWebhook &SmsWebhook::instance() {
     if (!_instance) {
@@ -42,7 +32,6 @@ void SmsWebhook::queueSms(SmsMessage smsMessage) {
 
     os_mutex_lock(sendQueueMutex);
     sendQueue.push_back(smsMessage);
-    sendQueue.back().updateQueueMs();
     os_mutex_unlock(sendQueueMutex);
 }
 
@@ -84,6 +73,7 @@ void SmsWebhook::stateWaitForMessage() {
     if (!msg.hasRecipient()) {
         if (recipientCallback && !recipientCallback(recipient)) {
             // Don't know the recipient yet; try again after timeout
+            _log.info("no recipient");
             stateTime = millis();
             retryTimeMs = retryNoRecipientMs;
             stateHandler = &SmsWebhook::stateWaitRetry;
@@ -104,6 +94,8 @@ void SmsWebhook::stateWaitForMessage() {
     }
     writer.endObject();
     writer.buffer()[std::min(writer.bufferSize(), writer.dataSize())] = 0;
+    
+    _log.info("publishing %s", jsonBuf);
 
     // Have a message and are connected
     publishFuture = Particle.publish(eventName, jsonBuf, PRIVATE | WITH_ACK);
