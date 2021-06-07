@@ -316,6 +316,10 @@ Tapping the MODE (or SETUP) button sends the SMS to the configured phone number.
 
 ## Version History
 
+### 0.0.2 (2021-06-07)
+
+- Add SmsMessageDelayed class
+
 ### 0.0.1 (2021-03-03)
 
 - Initial version

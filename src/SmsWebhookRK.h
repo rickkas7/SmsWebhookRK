@@ -7,6 +7,7 @@
 #include "Particle.h"
 
 #include <deque>
+#include <vector>
 
 /**
  * @brief Class for setting parameters for a SMS message.
@@ -16,7 +17,7 @@
  * ```
  * SmsMessage mesg;
  * mesg.withRecipient("+12125551212")
- *     .withMessage(String::format("Message %d!", ++counter));
+ *     .withMessage("test message!");
  * SmsWebhook::instance().queueSms(mesg);
  * ```
  */
@@ -85,6 +86,73 @@ protected:
      * @brief Message text to send
      */
     String message;
+};
+
+/**
+ * @brief Subclass of SmsMessage that delays before sending
+ * 
+ * This is used so you can warn only after a certain amount of time after a
+ * condition, allowing it to clear before sending the SMS.
+ * 
+ * Note: This object must live for the duration of the warning period so you almost never
+ * will want to create it as a stack allocated object like for SmsMessage.
+ */
+class SmsMessageDelayed : public SmsMessage {
+public:
+    /**
+     * @brief Constructor
+     */
+    SmsMessageDelayed();
+
+    /**
+     * @brief Desstructor
+     */
+    virtual ~SmsMessageDelayed();
+
+    /**
+     * @brief Set the delay before warning. 
+     * 
+     * If the warning is cleared using clearWarning() before the SMS goes out, it will not be sent
+     */
+    SmsMessageDelayed &withWarningDelay(std::chrono::milliseconds value) { warningWait = value.count(); return *this; };
+
+    /**
+     * @brief Set the delay before warning again. Default is to only warn once.
+     * 
+     */
+    SmsMessageDelayed &withWarningRepeat(std::chrono::milliseconds value) { warningRepeat = value.count(); return *this; };
+
+    /**
+     * @brief Starts the warning period
+     * 
+     * You can call this repeatedly, within the wait, period, if desired.
+     * It checks to make sure the timer is not already set.
+     */
+    void startWarning();
+
+    /**
+     * @brief Clear the warning
+     * 
+     * If the SMS has not been sent yet, then this will prevent it from
+     * being sent.
+     */
+    void clearWarning();
+
+    /**
+     * @brief Does a check and sends the message if necessary. This is fast and efficient.
+     */
+    void check();
+
+    /**
+     * @brief Gets the number of milliseconds since the warning started
+     */
+    unsigned long getElapsedMs() const { return warningStart ? millis() - warningStart : 0; };
+
+protected:
+    unsigned long warningStart = 0;
+    unsigned long warningWait = 0;
+    unsigned long warningRepeat = 0;
+    unsigned long warned = 0;
 };
 
 /**
@@ -174,7 +242,7 @@ public:
      * 
      *   bool recipientCallback(String &phone);
      * 
-     * The callback returns true if the recipient is know, or false if not. The if false is returned, then
+     * The callback returns true if the recipient is known, or false if not. The if false is returned, then
      * an attempt will be made again after the timeout.
      * 
      * The phone number must begin with "+" and the country code, so, for example in the US: +15558675310 .
@@ -191,7 +259,7 @@ public:
      * is common if the recipient SMS is sent from the cloud (Particle function, device notes, or
      * Google sheets). This parameter determines how long to wait before checking again.
      */
-    SmsWebhook &withRetryNoRecipientMs(unsigned long milliseconds) { retryNoRecipientMs = milliseconds; };
+    SmsWebhook &withRetryNoRecipientMs(unsigned long milliseconds) { retryNoRecipientMs = milliseconds; return *this; };
 
     /**
      * @brief Get the previously set retry when no recipient is specified value (or the default, if it hasn't been set yet)
@@ -209,7 +277,7 @@ public:
      * fails this is not consulted, but does take care of the situation where you have poor connectivity
      * and the publish is not able to be sent.
      */
-    SmsWebhook &withRetryPublishFailMs(unsigned long milliseconds) { retryPublishFailMs = milliseconds; };
+    SmsWebhook &withRetryPublishFailMs(unsigned long milliseconds) { retryPublishFailMs = milliseconds; return *this; };
 
     /**
      * @brief Get the previously set retry when publish fails value (or the default, if it hasn't been set yet)
@@ -227,7 +295,7 @@ public:
      * In addition to the Particle publish rate limit, you could also hit a rate limit at Twilio if you need 
      * to send a lot of SMS messages.
      */
-    SmsWebhook &withPublishRateLimitMs(unsigned long milliseconds) { publishRateLimitMs = milliseconds; };
+    SmsWebhook &withPublishRateLimitMs(unsigned long milliseconds) { publishRateLimitMs = milliseconds; return *this; };
 
     /**
      * @brief Get the previously set publish rate limit value (or the default, if it hasn't been set yet)
@@ -236,6 +304,20 @@ public:
      */
     unsigned long getPublishRateLimitMs() const { return publishRateLimitMs; };
 
+    /**
+     * @brief Regisers a delayed message (used internally)
+     * 
+     * You should never need to use this as SmsMessageDelayed calls this from its constructor.
+     */
+    void addDelayed(SmsMessageDelayed *obj);
+
+    /**
+     * @brief Unregisers a delayed message (used internally)
+     * 
+     * You should never need to use this as SmsMessageDelayed calls this from its desstructor.
+     */
+    void removeDelayed(SmsMessageDelayed *obj);
+    
 protected:
     /**
      * @brief Constructor (protected)
@@ -351,6 +433,11 @@ protected:
      * void stateHandlerMethod();
      */
     std::function<void(SmsWebhook &)> stateHandler = 0;
+
+    /**
+     * @brief Vector of delayed message objects
+     */
+    std::vector<SmsMessageDelayed *> delayedMessages;
 
     /**
      * @brief Singleton instance of this class

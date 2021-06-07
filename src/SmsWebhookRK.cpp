@@ -22,6 +22,12 @@ void SmsWebhook::loop() {
     if (stateHandler) {
         stateHandler(*this);
     }
+
+    // Handle delayed SMS messages
+    for(auto it = delayedMessages.begin(); it != delayedMessages.end(); it++) {
+        (*it)->check();
+    }
+
 }
 
 
@@ -132,4 +138,66 @@ void SmsWebhook::stateWaitRetry() {
     if (millis() - stateTime >= retryTimeMs) {
         stateHandler = &SmsWebhook::stateWaitForMessage;
     }
+}
+
+
+void SmsWebhook::addDelayed(SmsMessageDelayed *obj) {
+    delayedMessages.push_back(obj);
+}
+
+void SmsWebhook::removeDelayed(SmsMessageDelayed *obj) {
+    for(auto it = delayedMessages.begin(); it != delayedMessages.end(); ) {
+        if (*it == obj) {
+            it = delayedMessages.erase(it);
+        }
+        else {
+            it++;
+        }
+    }
+}
+
+SmsMessageDelayed::SmsMessageDelayed() {
+    SmsWebhook::instance().addDelayed(this);
+}
+
+SmsMessageDelayed::~SmsMessageDelayed() {
+    SmsWebhook::instance().removeDelayed(this);
+}
+
+void SmsMessageDelayed::startWarning() {
+    if (!warningStart) {
+        warningStart = millis();
+        warned = false;
+    }
+}
+
+void SmsMessageDelayed::clearWarning() {
+    warningStart = 0;
+}
+
+void SmsMessageDelayed::check() {
+    if (!warningStart) {
+        // No warning
+        return;
+    }
+
+    if (millis() - warningStart < warningWait) {
+        // Not time yet
+        return;
+    }
+
+    if (warned) {
+        if (!warningRepeat) {
+            // Only warn once
+            return;
+        }
+        if (millis() - warned < warningRepeat) {
+            // Not time to repeat warning yet
+            return;
+        }
+    }
+
+    warned = millis();
+
+    SmsWebhook::instance().queueSms(*this);
 }
